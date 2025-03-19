@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
+import os
+from PIL import Image
 
 # Set page configuration
 st.set_page_config(
@@ -41,6 +43,18 @@ def load_data():
     
     return df
 
+# Function to load company logo
+def load_company_logo(company_name):
+    # Create a standardized filename (lowercase, replace spaces with underscores)
+    filename = company_name.lower().replace(' ', '_').replace(',', '').replace('.', '') + '.png'
+    logo_path = os.path.join('logos', filename)
+    
+    # Check if logo file exists
+    if os.path.exists(logo_path):
+        return Image.open(logo_path)
+    else:
+        return None
+
 # Load the data
 df = load_data()
 
@@ -61,17 +75,30 @@ selected_company = st.sidebar.selectbox(
     index=0
 )
 
+# Load and display company logo in sidebar
+logo = load_company_logo(selected_company)
+if logo:
+    # Add some space before the logo
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Company Logo")
+    # Display logo in the sidebar with appropriate width
+    st.sidebar.image(logo, width=200)
+else:
+    # If no logo is found, display a message (can be commented out in production)
+    st.sidebar.markdown("---")
+    st.sidebar.info(f"No logo found for {selected_company}")
+
 # Filter data for selected company
 company_data = df[df['Organization Name'] == selected_company]
 
-# Display company information
+# Display company information in main area
 st.header(f"Funding Information for {selected_company}")
 
 # Show summary statistics
 total_raised = company_data['Money Raised (in USD)'].sum()
 num_rounds = len(company_data)
-latest_round = company_data.iloc[-1]['Funding Type']
-latest_date = company_data.iloc[-1]['Announced Date'].strftime("%B %d, %Y")
+latest_round = company_data.iloc[-1]['Funding Type'] if not company_data.empty else "N/A"
+latest_date = company_data.iloc[-1]['Announced Date'].strftime("%B %d, %Y") if not company_data.empty else "N/A"
 
 # Calculate funding by category totals
 funding_by_category = company_data.groupby('Funding Category')['Money Raised (in USD)'].sum()
@@ -92,9 +119,11 @@ if total_raised > 0:
     debt_to_total = f"{(debt_funding / total_raised) * 100:.1f}%"
 
 col1, col2 = st.columns(2)
-col1.metric("Total Funding", f"${total_raised:,.0f}")
-col1.metric("Number of Rounds", num_rounds)
-col2.metric("Latest Round", f"{latest_round} ({latest_date})")
+
+# Apply smaller font size to metrics using markdown with HTML
+col1.markdown("<div style='font-size: 20px;'><b>Total Funding</b><br/>{}</div>".format(f"${total_raised:,.0f}"), unsafe_allow_html=True)
+col1.markdown("<div style='font-size: 20px;'><b>Number of Rounds</b><br/>{}</div>".format(num_rounds), unsafe_allow_html=True)
+col2.markdown("<div style='font-size: 20px;'><b>Latest Round</b><br/>{}</div>".format(f"{latest_round} ({latest_date})"), unsafe_allow_html=True)
 
 # Create a new row for financial ratios
 st.subheader("Financial Ratios")
@@ -103,6 +132,7 @@ ratio_col1.metric("Debt-to-Equity Ratio", debt_to_equity)
 ratio_col2.metric("Debt-to-Total Funding", debt_to_total)
 ratio_col3.metric("Equity Percentage", f"{(equity_funding / total_raised) * 100:.1f}%" if total_raised > 0 else "0%")
 
+# Rest of the code remains the same...
 # Show funding breakdown by type
 st.subheader("Funding Breakdown")
 funding_types = company_data.groupby('Funding Category')['Money Raised (in USD)'].sum().reset_index()
@@ -201,4 +231,5 @@ details_df = details_df.rename(columns={
 })
 details_df['Announced Date'] = details_df['Announced Date'].dt.strftime('%Y-%m-%d')
 details_df['Amount (USD)'] = details_df['Amount (USD)'].apply(lambda x: f"${x:,.0f}")
-st.dataframe(details_df, use_container_width=True)
+# Display dataframe without the index column
+st.dataframe(details_df, use_container_width=True, hide_index=True)
